@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { safeNotification } from "../utils/haptics";
+import { playSuccessSound, playFailureSound } from "../utils/sounds";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -40,8 +41,10 @@ export default function InvestmentOutcome({
       // Trigger haptic feedback based on outcome
       if (isSuccess) {
         safeNotification(Haptics.NotificationFeedbackType.Success);
+        playSuccessSound(); // Play good investment sound effect
       } else {
         safeNotification(Haptics.NotificationFeedbackType.Error);
+        playFailureSound(); // Play bad investment sound effect
       }
 
       // Animate modal in

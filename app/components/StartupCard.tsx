@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
 } from "react-native";
+import { playSwipeSound } from "../utils/sounds";
 import { PanGestureHandler } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedGestureHandler,
@@ -34,8 +35,10 @@ import {
 } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-// Funding types for random selection
-const FUNDING_TYPES = [
+import { getFundingTypes } from "../utils/supabase";
+
+// Default funding types for random selection (will be replaced with data from Supabase)
+const DEFAULT_FUNDING_TYPES = [
   { type: "Equity", format: "$%amount% for %stake%% Equity in the Company" },
   { type: "Convertible Notes", format: "$%amount% via Convertible Notes" },
   {
@@ -110,6 +113,30 @@ const StartupCard = ({
   onSwipeLeft = () => {},
   onSwipeRight = (amount: number) => {},
 }: StartupCardProps) => {
+  // State for funding types from Supabase
+  const [fundingTypes, setFundingTypes] = useState(DEFAULT_FUNDING_TYPES);
+
+  // Load funding types from Supabase
+  useEffect(() => {
+    const loadFundingTypes = async () => {
+      try {
+        const data = await getFundingTypes();
+        if (data && data.length > 0) {
+          setFundingTypes(
+            data.map((item) => ({
+              type: item.type,
+              format: item.format,
+            })),
+          );
+        }
+      } catch (error) {
+        console.error("Error loading funding types:", error);
+      }
+    };
+
+    loadFundingTypes();
+  }, []);
+
   // Generate random funding amount and type
   const generateRandomFunding = () => {
     // Random amount between 100k and 999k
@@ -118,7 +145,7 @@ const StartupCard = ({
     const stake = Math.floor(Math.random() * 20) + 5;
     // Random funding type
     const fundingType =
-      FUNDING_TYPES[Math.floor(Math.random() * FUNDING_TYPES.length)];
+      fundingTypes[Math.floor(Math.random() * fundingTypes.length)];
 
     return {
       amount,
@@ -175,10 +202,12 @@ const StartupCard = ({
       if (translateX.value > SWIPE_THRESHOLD) {
         // Swipe right - invest
         translateX.value = withSpring(SCREEN_WIDTH * 1.5);
+        runOnJS(playSwipeSound)();
         runOnJS(onSwipeRight)(investmentAmount);
       } else if (translateX.value < -SWIPE_THRESHOLD) {
         // Swipe left - pass
         translateX.value = withSpring(-SCREEN_WIDTH * 1.5);
+        runOnJS(playSwipeSound)();
         runOnJS(onSwipeLeft)();
       } else {
         // Return to center
@@ -278,83 +307,92 @@ const StartupCard = ({
 
           {/* Main Card */}
           <View className="bg-white rounded-3xl shadow-2xl overflow-hidden h-full border-2 border-blue-100">
-            {/* Card Header */}
+            {/* Card Header - Updated design */}
             <LinearGradient
-              colors={["#3b82f6", "#1d4ed8"]}
+              colors={["#1e3a8a", "#1e40af"]}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              className="p-5 rounded-t-3xl"
+              end={{ x: 0, y: 1 }}
+              className="p-5 rounded-t-3xl border-b border-blue-400/30"
             >
-              <View className="flex-row justify-between items-center">
-                <Text className="text-white text-2xl font-bold">
-                  {companyName}
-                </Text>
-                <View className="bg-yellow-400/20 px-2 py-1 rounded-md">
-                  <Star size={16} color="#fbbf24" />
+              <View className="flex-row justify-between items-center mb-2">
+                <View className="bg-blue-700/50 px-3 py-1 rounded-full">
+                  <Text className="text-white text-xs font-medium">
+                    STARTUP PITCH
+                  </Text>
                 </View>
-              </View>
-
-              {/* Interactive Funding Ask */}
-              <Pressable
-                onPress={() => setShowAmountControls(!showAmountControls)}
-                className="mt-3 bg-white/20 p-3 rounded-xl border border-white/30"
-              >
-                <View className="flex-row justify-between items-start">
-                  <View className="flex-row items-start flex-1 mr-2">
-                    <DollarSign
-                      size={16}
-                      color="white"
-                      style={{ marginTop: 3 }}
-                    />
-                    <Text className="text-white ml-1 font-medium flex-shrink flex-wrap">
-                      Ask:{" "}
-                      <Text className="text-yellow-300 font-bold">
-                        ${fundingDetails.amount.toLocaleString()}
-                      </Text>{" "}
-                      {fundingDetails.type !== "Equity"
-                        ? `via ${fundingDetails.type}`
-                        : `for ${fundingDetails.stake}% Equity`}
-                    </Text>
-                  </View>
-                  <Sparkles size={16} color="#fbbf24" />
-                </View>
-
-                {showAmountControls && (
-                  <View className="mt-3 bg-white/10 p-3 rounded-lg">
-                    <Text className="text-white text-xs mb-2">
-                      Adjust your investment:
-                    </Text>
-                    <View className="flex-row items-center justify-between">
-                      <TouchableOpacity
-                        onPress={decreaseAmount}
-                        className="bg-blue-700 w-10 h-10 rounded-full items-center justify-center"
-                      >
-                        <ChevronDown size={20} color="white" />
-                      </TouchableOpacity>
-
-                      <Text className="text-white font-bold">
-                        ${investmentAmount.toLocaleString()}
-                      </Text>
-
-                      <TouchableOpacity
-                        onPress={increaseAmount}
-                        className="bg-blue-700 w-10 h-10 rounded-full items-center justify-center"
-                      >
-                        <ChevronUp size={20} color="white" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </Pressable>
-
-              <View className="flex-row justify-between mt-3">
-                <View className="flex-row items-center bg-green-500/30 px-3 py-1 rounded-full">
-                  <TrendingUp size={14} color="white" />
-                  <Text className="text-white ml-1 font-medium">
-                    ROI: {roiPotential}
+                <View className="bg-amber-500/20 px-3 py-1 rounded-full">
+                  <Text className="text-amber-400 text-xs font-medium">
+                    +{roiPotential} ROI
                   </Text>
                 </View>
               </View>
+
+              <Text className="text-white text-3xl font-bold mb-3">
+                {companyName}
+              </Text>
+
+              {/* Funding Ask */}
+              <Pressable
+                onPress={() => setShowAmountControls(!showAmountControls)}
+                className="mb-3"
+              >
+                <Text className="text-white text-center text-lg">
+                  Ask:{" "}
+                  <Text className="text-white font-bold">
+                    ${fundingDetails.amount.toLocaleString()}
+                  </Text>{" "}
+                  at $9.5M Valuation
+                </Text>
+              </Pressable>
+
+              {/* Funding Ask with Valuation */}
+              <View className="flex-row justify-between items-center">
+                <View>
+                  <Text className="text-blue-200 text-xs">Asking</Text>
+                  <Text className="text-white font-bold text-lg">
+                    ${fundingDetails.amount.toLocaleString()}
+                  </Text>
+                </View>
+
+                <View>
+                  <Text className="text-blue-200 text-xs">Valuation</Text>
+                  <Text className="text-white font-bold text-lg">$9.5M</Text>
+                </View>
+
+                <View>
+                  <Text className="text-blue-200 text-xs">Type</Text>
+                  <Text className="text-white font-bold text-sm">
+                    {fundingDetails.type}
+                  </Text>
+                </View>
+              </View>
+
+              {showAmountControls && (
+                <View className="mt-3 bg-white/10 p-3 rounded-lg">
+                  <Text className="text-white text-xs mb-2">
+                    Adjust your investment:
+                  </Text>
+                  <View className="flex-row items-center justify-between">
+                    <TouchableOpacity
+                      onPress={decreaseAmount}
+                      className="bg-amber-700 w-10 h-10 rounded-full items-center justify-center"
+                    >
+                      <ChevronDown size={20} color="white" />
+                    </TouchableOpacity>
+
+                    <Text className="text-white font-bold">
+                      ${investmentAmount.toLocaleString()}
+                    </Text>
+
+                    <TouchableOpacity
+                      onPress={increaseAmount}
+                      className="bg-amber-700 w-10 h-10 rounded-full items-center justify-center"
+                    >
+                      <ChevronUp size={20} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </LinearGradient>
 
             {/* Card Content - Scrollable */}
@@ -362,29 +400,32 @@ const StartupCard = ({
               className="flex-1 p-5"
               showsVerticalScrollIndicator={false}
             >
-              {/* Problem & Solution Section */}
-              <View className="mb-4 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
+              {/* Problem Section - Styled like the image */}
+              <View className="mb-4 bg-amber-50 p-4 rounded-xl shadow-md border border-amber-100">
                 <View className="flex-row items-center mb-3">
                   <View className="w-8 h-8 rounded-full bg-red-100 items-center justify-center mr-2">
-                    <TrendingDown size={16} color="#ef4444" />
+                    <TrendingDown size={16} color="#1e293b" />
                   </View>
-                  <Text className="text-red-500 font-bold text-base">
+                  <Text className="text-slate-800 font-bold text-base">
                     Problem
                   </Text>
                 </View>
-                <Text className="text-gray-700 text-sm leading-relaxed">
+                <Text className="text-slate-700 text-sm leading-relaxed">
                   {problem}
                 </Text>
+              </View>
 
-                <View className="flex-row items-center mb-3 mt-4">
+              {/* Solution Section - Styled like the image */}
+              <View className="mb-4 bg-amber-50 p-4 rounded-xl shadow-md border border-amber-100">
+                <View className="flex-row items-center mb-3">
                   <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mr-2">
-                    <Zap size={16} color="#3b82f6" />
+                    <Zap size={16} color="#1e293b" />
                   </View>
-                  <Text className="text-blue-500 font-bold text-base">
+                  <Text className="text-slate-800 font-bold text-base">
                     Solution
                   </Text>
                 </View>
-                <Text className="text-gray-700 text-sm leading-relaxed">
+                <Text className="text-slate-700 text-sm leading-relaxed">
                   {solution}
                 </Text>
               </View>
@@ -435,11 +476,13 @@ const StartupCard = ({
                 </View>
               </View>
 
-              {/* Use of Funds Chart */}
-              <View className="mb-4 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
+              {/* Use of Funds Chart - Styled like the image */}
+              <View className="mb-4 bg-amber-50 p-4 rounded-xl shadow-md border border-amber-100">
                 <View className="flex-row items-center mb-3">
-                  <PieChart size={16} color="#10b981" />
-                  <Text className="text-green-500 font-bold text-base ml-1">
+                  <View className="w-8 h-8 rounded-full bg-amber-100 items-center justify-center mr-2">
+                    <PieChart size={16} color="#1e293b" />
+                  </View>
+                  <Text className="text-slate-800 font-bold text-base">
                     Use of Funds
                   </Text>
                 </View>
@@ -449,21 +492,21 @@ const StartupCard = ({
                   {fundData.map((item, index) => (
                     <View key={index} className="mb-3">
                       <View className="flex-row justify-between mb-1">
-                        <Text className="text-gray-700 text-xs font-medium">
+                        <Text className="text-slate-700 text-xs font-medium">
                           {item.category}
                         </Text>
-                        <Text className="text-gray-700 text-xs font-medium">
+                        <Text className="text-slate-700 text-xs font-medium">
                           {item.percent}%
                         </Text>
                       </View>
-                      <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                      <View className="h-3 bg-slate-200 rounded-full overflow-hidden">
                         <LinearGradient
                           colors={
                             index === 0
-                              ? ["#60a5fa", "#3b82f6"]
+                              ? ["#1e40af", "#1e3a8a"]
                               : index === 1
-                                ? ["#4ade80", "#10b981"]
-                                : ["#fbbf24", "#f59e0b"]
+                                ? ["#0f766e", "#115e59"]
+                                : ["#b45309", "#92400e"]
                           }
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}

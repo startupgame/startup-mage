@@ -11,6 +11,20 @@ import { StatusBar } from "expo-status-bar";
 import * as Haptics from "expo-haptics";
 import { safeImpact } from "./utils/haptics";
 import { BarChart, Award } from "lucide-react-native";
+import {
+  supabase,
+  saveGameState,
+  saveInvestment,
+  updateLeaderboard,
+  saveMissionProgress,
+} from "./utils/supabase";
+import { checkSession, initializeUserData } from "./utils/auth";
+import {
+  initSounds,
+  unloadSounds,
+  playSuccessSound,
+  playFailureSound,
+} from "./utils/sounds";
 
 import StartupCard from "./components/StartupCard";
 import GameHeader from "./components/GameHeader";
@@ -168,6 +182,8 @@ export default function MainGameScreen() {
   const [completedInvestments, setCompletedInvestments] = useState(0);
   const [investmentStreak, setInvestmentStreak] = useState(0);
   const [portfolio, setPortfolio] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [notification, setNotification] = useState({
     visible: false,
     message: "",
@@ -191,14 +207,38 @@ export default function MainGameScreen() {
     }, 10000);
   };
 
-  // Set up idle timer on mount
+  // Initialize sounds and set up idle timer on mount
   useEffect(() => {
+    // Initialize sound effects
+    initSounds();
+
+    // Reset idle timer
     resetIdleTimer();
+
+    // Check if user is already logged in
+    checkSession().then((user) => {
+      if (user) {
+        setUserId(user.id);
+        setIsLoggedIn(true);
+
+        // Initialize user data
+        initializeUserData(user.id).then((data) => {
+          if (data) {
+            setBalance(data.balance);
+            setScore(data.score);
+            setCompletedInvestments(data.completedInvestments);
+            setInvestmentStreak(data.investmentStreak);
+          }
+        });
+      }
+    });
 
     return () => {
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
       }
+      // Unload sounds when component unmounts
+      unloadSounds();
     };
   }, []);
 
@@ -279,13 +319,13 @@ export default function MainGameScreen() {
     // Determine outcome based on ROI potential (higher ROI = higher risk)
     // ROI > 100% = higher risk/reward, ROI < 100% = lower risk/reward
     const roiPotential = startup.roiPotential;
-    let successRate = 0.6; // Base 60% success rate
+    let successRate = 0.2; // Base 20% success rate (80% failure)
 
     // Adjust success rate based on ROI potential
     if (roiPotential > 150) {
-      successRate = 0.4; // High ROI = higher risk (40% success)
+      successRate = 0.1; // High ROI = higher risk (10% success, 90% failure)
     } else if (roiPotential < 80) {
-      successRate = 0.75; // Low ROI = lower risk (75% success)
+      successRate = 0.3; // Low ROI = lower risk (30% success, 70% failure)
     }
 
     const isSuccess = Math.random() < successRate;
@@ -315,6 +355,34 @@ export default function MainGameScreen() {
         message: `Great investment in ${startup.name}! +${(returnAmount - investmentAmount).toLocaleString()}`,
         type: "success",
       });
+
+      // Play success sound
+      playSuccessSound();
+
+      // Save investment to Supabase if logged in
+      if (userId) {
+        const investment = {
+          companyName: startup.name,
+          investedAmount: investmentAmount,
+          currentValue: returnAmount,
+          changePercentage:
+            ((returnAmount - investmentAmount) / investmentAmount) * 100,
+          investmentDate: new Date().toISOString(),
+        };
+
+        saveInvestment(userId, investment);
+
+        // Update game state
+        saveGameState(userId, {
+          balance,
+          score,
+          completedInvestments,
+          investmentStreak,
+        });
+
+        // Update leaderboard
+        updateLeaderboard(userId, "Player", score);
+      }
     } else {
       // Failure: lose 50% to 100% of investment
       const lossPercentage = 0.5 + Math.random() * 0.5;
@@ -332,6 +400,33 @@ export default function MainGameScreen() {
         message: `Investment in ${startup.name} didn't pay off. -${Math.abs(returnAmount).toLocaleString()}`,
         type: "error",
       });
+
+      // Play failure sound
+      playFailureSound();
+
+      // Save investment to Supabase if logged in
+      if (userId) {
+        const investment = {
+          companyName: startup.name,
+          investedAmount: investmentAmount,
+          currentValue: investmentAmount - lossAmount,
+          changePercentage: -lossPercentage * 100,
+          investmentDate: new Date().toISOString(),
+        };
+
+        saveInvestment(userId, investment);
+
+        // Update game state
+        saveGameState(userId, {
+          balance,
+          score,
+          completedInvestments: completedInvestments,
+          investmentStreak: 0,
+        });
+
+        // Update leaderboard
+        updateLeaderboard(userId, "Player", score);
+      }
     }
 
     // Animate card off screen and ensure next card appears
@@ -508,7 +603,24 @@ export default function MainGameScreen() {
         setScore((prev) => prev + mission.reward);
       }
 
-      // Would update mission completed status in a real app
+      // Update mission completed status
+      const updatedMissions = dailyMissions.map((m) =>
+        m.id === missionId ? { ...m, completed: true } : m,
+      );
+
+      // Save mission progress to Supabase if logged in
+      if (userId) {
+        saveMissionProgress(userId, missionId, mission.target, true);
+
+        // Update game state with new balance/score
+        saveGameState(userId, {
+          balance,
+          score:
+            mission.rewardType === "points" ? score + mission.reward : score,
+          completedInvestments,
+          investmentStreak,
+        });
+      }
     }
   };
 
@@ -600,6 +712,7 @@ export default function MainGameScreen() {
         investments={mockPortfolio}
         totalInvested={totalInvested}
         totalValue={totalValue}
+        userId={userId}
         onBack={() => setShowPortfolio(false)}
       />
     );
@@ -611,6 +724,7 @@ export default function MainGameScreen() {
         achievements={mockAchievements}
         totalAchievements={mockAchievements.length}
         unlockedAchievements={mockAchievements.filter((a) => a.unlocked).length}
+        userId={userId}
         onBack={() => setShowAchievements(false)}
       />
     );
@@ -726,6 +840,7 @@ export default function MainGameScreen() {
             handleMissionClaim(missionId);
           }}
           isOpen={showDailyMissions}
+          userId={userId}
           onClose={() => {
             resetIdleTimer();
             setShowDailyMissions(false);

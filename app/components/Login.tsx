@@ -19,6 +19,7 @@ import {
   User,
   Github,
   Twitter,
+  LogIn,
 } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -123,7 +124,9 @@ const Login = ({ onLogin }: LoginProps) => {
     }
   };
 
-  const handleSocialLogin = async (provider: "github" | "twitter") => {
+  const handleSocialLogin = async (
+    provider: "github" | "twitter" | "google",
+  ) => {
     try {
       setLoading(true);
       setError("");
@@ -258,6 +261,12 @@ const Login = ({ onLogin }: LoginProps) => {
               onPress={() => handleSocialLogin("twitter")}
             >
               <Twitter size={24} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="bg-[#DB4437] w-12 h-12 rounded-full items-center justify-center"
+              onPress={() => handleSocialLogin("google")}
+            >
+              <Text className="text-white font-bold">G</Text>
             </TouchableOpacity>
           </View>
 

@@ -1,8 +1,20 @@
-import React from "react";
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import { CheckCircle2, Circle, Award, Zap } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { safeNotification } from "../utils/haptics";
+import { playCoinSound } from "../utils/sounds";
+import {
+  supabase,
+  getMissionProgress,
+  saveMissionProgress,
+} from "../utils/supabase";
 
 interface Mission {
   id: string;
@@ -20,18 +32,95 @@ interface DailyMissionsProps {
   onMissionClaim?: (missionId: string) => void;
   isOpen?: boolean;
   onClose?: () => void;
+  userId?: string;
 }
 
 const DailyMissions = ({
-  missions = [],
+  missions: initialMissions = [],
   onMissionClaim = () => {},
   isOpen = true,
   onClose = () => {},
+  userId = null,
 }: DailyMissionsProps) => {
+  const [missions, setMissions] = useState(initialMissions);
+  const [loading, setLoading] = useState(false);
+
+  // Load missions from Supabase when component mounts or userId changes
+  useEffect(() => {
+    if (isOpen && userId) {
+      loadMissions();
+    }
+  }, [isOpen, userId]);
+
+  // Function to load missions from Supabase
+  const loadMissions = async () => {
+    if (!userId) return;
+
+    setLoading(true);
+    try {
+      // First try to get missions from Supabase
+      const { data: missionsData, error } = await supabase
+        .from("missions")
+        .select("*");
+
+      if (error) throw error;
+
+      // Get user mission progress from Supabase
+      const progressData = await getMissionProgress(userId);
+
+      // If we have missions data from Supabase
+      if (missionsData && missionsData.length > 0) {
+        // Map the missions with user progress
+        const mappedMissions = missionsData.map((mission) => {
+          // Find user progress for this mission
+          const userProgress = progressData?.find(
+            (p) => p.mission_id === mission.id,
+          );
+
+          return {
+            id: mission.id,
+            title: mission.title,
+            description: mission.description,
+            reward: mission.reward,
+            rewardType: mission.reward_type,
+            progress: userProgress?.progress || 0,
+            target: mission.target,
+            completed: userProgress?.completed || false,
+          };
+        });
+
+        setMissions(mappedMissions);
+      } else {
+        // If no missions in Supabase yet, use default missions
+        // and create them in Supabase
+        setMissions(initialMissions);
+
+        // Create default missions in Supabase if they don't exist
+        for (const mission of initialMissions) {
+          await supabase.from("missions").upsert({
+            id: mission.id,
+            title: mission.title,
+            description: mission.description,
+            reward: mission.reward,
+            reward_type: mission.rewardType,
+            target: mission.target,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error loading missions:", error);
+      // Fall back to initial missions on error
+      setMissions(initialMissions);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const handleClaimReward = (missionId: string) => {
     safeNotification(Haptics.NotificationFeedbackType.Success);
+    playCoinSound(); // Play achievement claim sound when claiming reward
     onMissionClaim(missionId);
   };
 
@@ -51,7 +140,12 @@ const DailyMissions = ({
 
         {/* Missions List */}
         <ScrollView className="max-h-[400px] p-4">
-          {missions.length > 0 ? (
+          {loading ? (
+            <View className="items-center justify-center py-10">
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text className="text-slate-400 mt-4">Loading missions...</Text>
+            </View>
+          ) : missions.length > 0 ? (
             missions.map((mission) => (
               <View
                 key={mission.id}
