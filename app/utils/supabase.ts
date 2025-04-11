@@ -55,7 +55,7 @@ export async function saveGameState(userId: string, gameData: any) {
       {
         user_id: userId,
         balance: gameData.balance,
-        score: gameData.score,
+        shark_dollars: gameData.sharkDollars || 0,
         completed_investments: gameData.completedInvestments,
         investment_streak: gameData.investmentStreak,
         last_updated: new Date().toISOString(),
@@ -129,7 +129,8 @@ export async function getInvestments(userId: string) {
       .from("investments")
       .select("*, startup_cards(*)")
       .eq("user_id", userId)
-      .order("investment_date", { ascending: false });
+      .order("investment_date", { ascending: false })
+      .limit(25); // Updated to limit to last 25 investments
 
     if (error) throw error;
     return data;
@@ -142,7 +143,7 @@ export async function getInvestments(userId: string) {
 export async function updateLeaderboard(
   userId: string,
   name: string,
-  score: number,
+  sharkDollars: number,
 ) {
   try {
     if (isDummyClient) {
@@ -154,7 +155,7 @@ export async function updateLeaderboard(
       {
         user_id: userId,
         name,
-        score,
+        shark_dollars: sharkDollars,
         last_updated: new Date().toISOString(),
       },
       { onConflict: "user_id" },
@@ -178,7 +179,7 @@ export async function getLeaderboard(limit = 10) {
     const { data, error } = await supabase
       .from("leaderboard")
       .select("*")
-      .order("score", { ascending: false })
+      .order("shark_dollars", { ascending: false })
       .limit(limit);
 
     if (error) throw error;
@@ -257,6 +258,92 @@ export async function getStartupCards() {
     return data;
   } catch (error) {
     console.error("Error getting startup cards:", error);
+    return [];
+  }
+}
+
+// Track viewed cards to avoid repeating them unnecessarily
+export async function saveViewedCard(
+  userId: string,
+  cardId: string,
+  action: string = "viewed",
+) {
+  try {
+    if (isDummyClient || !userId || !cardId) {
+      console.log("[Mock] Saving viewed card:", cardId);
+      return null;
+    }
+
+    const { data, error } = await supabase.from("user_viewed_cards").upsert(
+      {
+        user_id: userId,
+        card_id: cardId,
+        viewed_at: new Date().toISOString(),
+        action: action,
+      },
+      { onConflict: ["user_id", "card_id"] },
+    );
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error saving viewed card:", error);
+    return null;
+  }
+}
+
+// Get fresh startup cards that haven't been viewed by the user
+export async function getFreshStartupCards(userId: string) {
+  try {
+    if (isDummyClient || !userId) {
+      console.log("[Mock] Getting fresh startup cards");
+      return [];
+    }
+
+    // First try to get cards the user hasn't viewed yet
+    const { data: freshCards, error: freshError } = await supabase
+      .from("startup_cards")
+      .select("*")
+      .not(
+        "id",
+        "in",
+        supabase
+          .from("user_viewed_cards")
+          .select("card_id")
+          .eq("user_id", userId),
+      )
+      .order("created_at", { ascending: false });
+
+    if (freshError) throw freshError;
+
+    // If we have fresh cards, return them
+    if (freshCards && freshCards.length > 0) {
+      return freshCards;
+    }
+
+    // If no fresh cards, reset viewed status and return all cards
+    // This means the user has seen all cards, so we'll show them again
+    console.log("No fresh cards found, resetting viewed status");
+
+    // Get all cards
+    const { data: allCards, error: allError } = await supabase
+      .from("startup_cards")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (allError) throw allError;
+
+    // Clear viewed cards for this user
+    const { error: deleteError } = await supabase
+      .from("user_viewed_cards")
+      .delete()
+      .eq("user_id", userId);
+
+    if (deleteError) console.error("Error clearing viewed cards:", deleteError);
+
+    return allCards || [];
+  } catch (error) {
+    console.error("Error getting fresh startup cards:", error);
     return [];
   }
 }

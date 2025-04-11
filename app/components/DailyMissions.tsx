@@ -181,15 +181,9 @@ const DailyMissions = ({
                     {mission.progress}/{mission.target} completed
                   </Text>
                   <View className="flex-row items-center">
-                    {mission.rewardType === "cash" ? (
-                      <Text className="text-yellow-400 font-bold">
-                        ${mission.reward.toLocaleString()}
-                      </Text>
-                    ) : (
-                      <Text className="text-blue-400 font-bold">
-                        {mission.reward} points
-                      </Text>
-                    )}
+                    <Text className="text-yellow-400 font-bold">
+                      ${mission.reward.toLocaleString()} Shark Dollars
+                    </Text>
                   </View>
                 </View>
 

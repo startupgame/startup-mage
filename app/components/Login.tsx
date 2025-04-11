@@ -9,6 +9,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { supabase } from "../utils/supabase";
 import {
@@ -20,6 +21,7 @@ import {
   Github,
   Twitter,
   LogIn,
+  Linkedin,
 } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -102,20 +104,73 @@ const Login = ({ onLogin }: LoginProps) => {
 
       // Create user profile
       if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert([
-          {
-            id: data.user.id,
-            name,
-            email,
-            created_at: new Date().toISOString(),
-          },
-        ]);
+        try {
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .insert([
+              {
+                id: data.user.id,
+                name,
+                email,
+                created_at: new Date().toISOString(),
+              },
+            ]);
 
-        if (profileError) throw profileError;
+          if (profileError) {
+            console.error("Profile creation error:", profileError);
+            // Continue with login even if profile creation fails
+            // The profile might already exist or will be created later
+          }
+
+          // Initialize game state for new user
+          const { error: gameStateError } = await supabase
+            .from("game_states")
+            .insert([
+              {
+                user_id: data.user.id,
+                balance: 1000000, // Starting with $1M
+                shark_dollars: 0,
+                completed_investments: 0,
+                investment_streak: 0,
+                last_updated: new Date().toISOString(),
+              },
+            ]);
+
+          if (gameStateError && gameStateError.code !== "23505") {
+            // Ignore duplicate key errors
+            console.error("Game state initialization error:", gameStateError);
+          }
+        } catch (initError) {
+          console.error("User initialization error:", initError);
+          // Continue with login even if initialization fails
+        }
       }
 
       // Auto-login after registration
-      onLogin(data.user);
+      if (data.user) {
+        // Get user profile from database
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", data.user.id)
+            .single();
+
+          onLogin({ ...data.user, profile: profileData });
+        } catch (profileError) {
+          console.error(
+            "Error fetching profile after registration:",
+            profileError,
+          );
+          // Login without profile data if fetch fails
+          onLogin(data.user);
+        }
+      } else {
+        // Handle edge case where user data is missing
+        setError(
+          "Registration successful but user data is missing. Please try logging in.",
+        );
+      }
     } catch (error: any) {
       console.error("Registration error:", error);
       setError(error.message || "Failed to register");
@@ -125,7 +180,7 @@ const Login = ({ onLogin }: LoginProps) => {
   };
 
   const handleSocialLogin = async (
-    provider: "github" | "twitter" | "google",
+    provider: "github" | "twitter" | "google" | "linkedin",
   ) => {
     try {
       setLoading(true);
@@ -135,7 +190,17 @@ const Login = ({ onLogin }: LoginProps) => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: "exp://localhost:19000",
+          redirectTo:
+            Platform.OS === "web"
+              ? window.location.origin
+              : "exp://localhost:19000",
+          queryParams:
+            provider === "google"
+              ? {
+                  access_type: "offline",
+                  prompt: "consent",
+                }
+              : undefined,
         },
       });
 
@@ -267,6 +332,12 @@ const Login = ({ onLogin }: LoginProps) => {
               onPress={() => handleSocialLogin("google")}
             >
               <Text className="text-white font-bold">G</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="bg-[#0077B5] w-12 h-12 rounded-full items-center justify-center"
+              onPress={() => handleSocialLogin("linkedin")}
+            >
+              <Linkedin size={24} color="white" />
             </TouchableOpacity>
           </View>
 

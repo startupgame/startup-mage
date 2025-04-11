@@ -147,10 +147,10 @@ export default function InvestmentOutcome({
             </View>
           </View>
 
-          {/* Points */}
+          {/* Shark Dollars */}
           <View className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg mb-6 items-center">
             <Text className="text-gray-800 dark:text-gray-200 font-medium">
-              {isSuccess ? "+200 points" : "-50 points"}
+              {isSuccess ? "+20,000 Shark Dollars" : "-5,000 Shark Dollars"}
             </Text>
           </View>
 

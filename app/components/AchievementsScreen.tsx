@@ -157,7 +157,7 @@ const AchievementsScreen = ({
       progress: 12,
       target: 50,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "2",
@@ -168,7 +168,7 @@ const AchievementsScreen = ({
       progress: 12,
       target: 100,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "3",
@@ -179,7 +179,7 @@ const AchievementsScreen = ({
       progress: 12,
       target: 500,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "4",
@@ -190,7 +190,7 @@ const AchievementsScreen = ({
       progress: 12,
       target: 1000,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "5",
@@ -201,7 +201,7 @@ const AchievementsScreen = ({
       progress: 450000,
       target: 1000000,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "6",
@@ -212,7 +212,7 @@ const AchievementsScreen = ({
       progress: 450000,
       target: 5000000,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "7",
@@ -223,7 +223,7 @@ const AchievementsScreen = ({
       progress: 450000,
       target: 10000000,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "8",
@@ -234,7 +234,7 @@ const AchievementsScreen = ({
       progress: 1,
       target: 5,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
     {
       id: "9",
@@ -245,153 +245,68 @@ const AchievementsScreen = ({
       progress: 2,
       target: 10,
       unlocked: false,
-      category: "main",
+      category: "milestone",
     },
-    // Funding model achievements
+    // Daily achievements
     {
       id: "10",
-      title: "Equity Enthusiast",
-      description: "Invest in 10 startups offering traditional equity deals",
+      title: "First Investment",
+      description: "Make your first investment of the day",
       reward: 25000,
       rewardType: "cash",
-      progress: 3,
-      target: 10,
+      progress: 0,
+      target: 1,
       unlocked: false,
-      badge: "Equity Enthusiast",
-      category: "funding",
+      badge: "Early Bird",
+      category: "daily",
     },
     {
       id: "11",
-      title: "Convertible Pro",
-      description: "Invest in 10 startups using Convertible Notes",
-      reward: 25000,
-      rewardType: "cash",
-      progress: 2,
-      target: 10,
-      unlocked: false,
-      badge: "Note Ninja",
-      category: "funding",
-    },
-    {
-      id: "12",
-      title: "SAFE Operator",
-      description: "Invest in 10 startups using SAFE agreements",
+      title: "Daily Streak",
+      description: "Invest on 3 consecutive days",
       reward: 25000,
       rewardType: "cash",
       progress: 1,
-      target: 10,
+      target: 3,
       unlocked: false,
-      badge: "SAFE Shark",
-      category: "funding",
+      badge: "Consistent",
+      category: "daily",
+    },
+    {
+      id: "12",
+      title: "Big Spender",
+      description: "Invest $500,000 in a single day",
+      reward: 25000,
+      rewardType: "cash",
+      progress: 0,
+      target: 500000,
+      unlocked: false,
+      badge: "Big Spender",
+      category: "daily",
     },
     {
       id: "13",
-      title: "Debt Dominator",
-      description: "Invest in 10 startups using debt-based models",
+      title: "Shark Frenzy",
+      description: "Make 10 investments in a single day",
       reward: 25000,
       rewardType: "cash",
       progress: 0,
       target: 10,
       unlocked: false,
-      badge: "Debt Dominator",
-      category: "funding",
+      badge: "Frenzy",
+      category: "daily",
     },
     {
       id: "14",
-      title: "Crowdfund Champ",
-      description: "Invest in 10 startups via Equity Crowdfunding",
-      reward: 25000,
-      rewardType: "cash",
-      progress: 0,
-      target: 10,
-      unlocked: false,
-      badge: "Crowd Champ",
-      category: "funding",
-    },
-    {
-      id: "15",
-      title: "Angel Ally",
-      description: "Invest in 10 startups backed by Angel Investors",
-      reward: 25000,
-      rewardType: "cash",
-      progress: 0,
-      target: 10,
-      unlocked: false,
-      badge: "Angel Ally",
-      category: "funding",
-    },
-    {
-      id: "16",
-      title: "Accelerator Addict",
-      description:
-        "Invest in 10 startups funded through Incubators or Accelerators",
-      reward: 25000,
-      rewardType: "cash",
-      progress: 0,
-      target: 10,
-      unlocked: false,
-      badge: "Speed Starter",
-      category: "funding",
-    },
-    {
-      id: "17",
-      title: "Crypto Capitalist",
-      description: "Invest in 10 startups using ICO or IEO",
-      reward: 25000,
-      rewardType: "cash",
-      progress: 0,
-      target: 10,
-      unlocked: false,
-      badge: "Crypto Shark",
-      category: "funding",
-    },
-    {
-      id: "18",
-      title: "Grant Getter",
-      description: "Invest in 10 startups using Grants or Government Loans",
-      reward: 25000,
-      rewardType: "cash",
-      progress: 0,
-      target: 10,
-      unlocked: false,
-      badge: "Grant Getter",
-      category: "funding",
-    },
-    {
-      id: "19",
-      title: "Bootstrap Boss",
-      description: "Invest in 10 bootstrapped startups",
-      reward: 25000,
-      rewardType: "cash",
-      progress: 0,
-      target: 10,
-      unlocked: false,
-      badge: "Bootstrap Boss",
-      category: "funding",
-    },
-    {
-      id: "20",
-      title: "Alt-Fin Master",
-      description: "Invest in 10 startups using alternative financing methods",
+      title: "Perfect Day",
+      description: "Make 5 successful investments in a row in one day",
       reward: 50000,
       rewardType: "cash",
       progress: 0,
-      target: 10,
-      unlocked: false,
-      badge: "Alt-Fin Master",
-      category: "funding",
-    },
-    {
-      id: "21",
-      title: "Funding Diversity",
-      description: "Invest in startups using 5 different funding models",
-      reward: 100000,
-      rewardType: "cash",
-      progress: 2,
       target: 5,
       unlocked: false,
-      badge: "Funding Guru",
-      category: "funding",
+      badge: "Perfect",
+      category: "daily",
     },
   ];
 
@@ -453,16 +368,16 @@ const AchievementsScreen = ({
                 <Text className="text-white font-medium">All</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setActiveCategory("main")}
-                className={`px-3 py-1 rounded-full ${activeCategory === "main" ? "bg-purple-500" : "bg-purple-800"}`}
+                onPress={() => setActiveCategory("daily")}
+                className={`px-3 py-1 rounded-full ${activeCategory === "daily" ? "bg-purple-500" : "bg-purple-800"}`}
               >
-                <Text className="text-white font-medium">Main</Text>
+                <Text className="text-white font-medium">Daily</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setActiveCategory("funding")}
-                className={`px-3 py-1 rounded-full ${activeCategory === "funding" ? "bg-purple-500" : "bg-purple-800"}`}
+                onPress={() => setActiveCategory("milestone")}
+                className={`px-3 py-1 rounded-full ${activeCategory === "milestone" ? "bg-purple-500" : "bg-purple-800"}`}
               >
-                <Text className="text-white font-medium">Funding Models</Text>
+                <Text className="text-white font-medium">Milestones</Text>
               </TouchableOpacity>
             </View>
 
@@ -528,9 +443,7 @@ const AchievementsScreen = ({
                         </Text>
                         <View className="flex-row items-center bg-purple-900/50 px-3 py-1 rounded-full">
                           <Text className="text-purple-300 font-medium">
-                            {achievement.rewardType === "cash" ? "$" : ""}
-                            {achievement.reward.toLocaleString()}
-                            {achievement.rewardType === "points" ? " pts" : ""}
+                            ${achievement.reward.toLocaleString()} Shark Dollars
                             {achievement.badge ? ` + ${achievement.badge}` : ""}
                           </Text>
                         </View>

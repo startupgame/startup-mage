@@ -68,7 +68,9 @@ const Leaderboard = ({
           <Text className="text-white text-2xl font-bold mt-2">
             Global Leaderboard
           </Text>
-          <Text className="text-blue-200 text-sm">Top investors this week</Text>
+          <Text className="text-blue-200 text-sm">
+            Top Shark Dollar investors
+          </Text>
         </View>
 
         {/* Close button */}
@@ -118,7 +120,7 @@ const Leaderboard = ({
 
               {/* Score */}
               <Text className="text-white font-bold">
-                {entry.score.toLocaleString()} pts
+                ${entry.score.toLocaleString()}
               </Text>
             </View>
           ))}

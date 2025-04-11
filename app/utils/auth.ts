@@ -119,7 +119,7 @@ export async function initializeUserData(userId: string) {
         {
           user_id: userId,
           balance: 1000000,
-          score: 0,
+          shark_dollars: 0,
           completed_investments: 0,
           investment_streak: 0,
           last_updated: new Date().toISOString(),
@@ -130,7 +130,7 @@ export async function initializeUserData(userId: string) {
       // Return default values
       return {
         balance: 1000000,
-        score: 0,
+        sharkDollars: 0,
         completedInvestments: 0,
         investmentStreak: 0,
       };
@@ -139,7 +139,7 @@ export async function initializeUserData(userId: string) {
     // Return existing game state
     return {
       balance: gameState.balance,
-      score: gameState.score,
+      sharkDollars: gameState.shark_dollars || 0,
       completedInvestments: gameState.completed_investments,
       investmentStreak: gameState.investment_streak,
     };
@@ -148,7 +148,7 @@ export async function initializeUserData(userId: string) {
     // Return default values on error
     return {
       balance: 1000000,
-      score: 0,
+      sharkDollars: 0,
       completedInvestments: 0,
       investmentStreak: 0,
     };

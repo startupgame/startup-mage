@@ -18,4 +18,8 @@ export const DEFAULT_FUNDING_TYPES = [
   { type: "Corporate VC", format: "$%amount% via Corporate Venture Capital" },
   { type: "ICO", format: "$%amount% through an Initial Coin Offering (ICO)" },
   { type: "IEO", format: "$%amount% via an Initial Exchange Offering (IEO)" },
-  { type: "Strategic", format: "
+  {
+    type: "Strategic",
+    format: "$%amount% via Strategic Partnership Investment",
+  },
+];
