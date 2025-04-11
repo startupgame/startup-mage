@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,26 @@ import { StatusBar } from "expo-status-bar";
 import * as Haptics from "expo-haptics";
 import { safeImpact } from "./utils/haptics";
 import { BarChart, Award } from "lucide-react-native";
+import {
+  supabase,
+  saveGameState,
+  saveInvestment,
+  updateLeaderboard,
+  saveMissionProgress,
+  getStartupCards,
+} from "./utils/supabase";
+import { checkSession, initializeUserData } from "./utils/auth";
+import {
+  initSounds,
+  unloadSounds,
+  playSuccessSound,
+  playFailureSound,
+} from "./utils/sounds";
+import {
+  fetchStartupCards,
+  seedStartupCards,
+  seedFundingTypes,
+} from "./utils/fetchStartupCards";
 
 import StartupCard from "./components/StartupCard";
 import GameHeader from "./components/GameHeader";
@@ -22,8 +42,8 @@ import PortfolioScreen from "./components/PortfolioScreen";
 import AchievementsScreen from "./components/AchievementsScreen";
 import HeaderNotification from "./components/HeaderNotification";
 
-// Mock data for startup cards with enhanced pitch information
-const MOCK_STARTUPS = [
+// Default startup cards (will be replaced with data from Supabase)
+const DEFAULT_STARTUPS = [
   {
     id: "1",
     name: "GreenGrow",
@@ -152,8 +172,9 @@ const MOCK_STARTUPS = [
 
 export default function MainGameScreen() {
   const [balance, setBalance] = useState(1000000); // Starting with $1M Shark Dollars
-  const [score, setScore] = useState(0);
+  const [sharkDollars, setSharkDollars] = useState(0);
   const [currentStartupIndex, setCurrentStartupIndex] = useState(0);
+  const [startups, setStartups] = useState(DEFAULT_STARTUPS);
   const [showOutcome, setShowOutcome] = useState(false);
   const [investmentResult, setInvestmentResult] = useState({
     success: false,
@@ -168,12 +189,15 @@ export default function MainGameScreen() {
   const [completedInvestments, setCompletedInvestments] = useState(0);
   const [investmentStreak, setInvestmentStreak] = useState(0);
   const [portfolio, setPortfolio] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [notification, setNotification] = useState({
     visible: false,
     message: "",
     type: "success",
   });
   const [showInstruction, setShowInstruction] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Reset idle timer whenever user interacts
@@ -191,16 +215,68 @@ export default function MainGameScreen() {
     }, 10000);
   };
 
-  // Set up idle timer on mount
+  // Load startup cards from Supabase
+  const loadStartupCards = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Seed funding types and startup cards if needed
+      await seedFundingTypes();
+      await seedStartupCards();
+
+      // Fetch startup cards
+      const cards = await fetchStartupCards();
+      if (cards && cards.length > 0) {
+        setStartups(cards);
+        console.log(`Loaded ${cards.length} startup cards from Supabase`);
+      } else {
+        console.log("No startup cards found in Supabase, using defaults");
+        setStartups(DEFAULT_STARTUPS);
+      }
+    } catch (error) {
+      console.error("Error loading startup cards:", error);
+      setStartups(DEFAULT_STARTUPS);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initialize sounds, idle timer, and load data on mount
   useEffect(() => {
+    // Initialize sound effects
+    initSounds();
+
+    // Reset idle timer
     resetIdleTimer();
+
+    // Load startup cards
+    loadStartupCards();
+
+    // Check if user is already logged in
+    checkSession().then((user) => {
+      if (user) {
+        setUserId(user.id);
+        setIsLoggedIn(true);
+
+        // Initialize user data
+        initializeUserData(user.id).then((data) => {
+          if (data) {
+            setBalance(data.balance);
+            setSharkDollars(data.sharkDollars);
+            setCompletedInvestments(data.completedInvestments);
+            setInvestmentStreak(data.investmentStreak);
+          }
+        });
+      }
+    });
 
     return () => {
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
       }
+      // Unload sounds when component unmounts
+      unloadSounds();
     };
-  }, []);
+  }, [loadStartupCards]);
 
   // Animation values
   const position = useRef(new Animated.ValueXY()).current;
@@ -216,20 +292,101 @@ export default function MainGameScreen() {
     position.setValue({ x: 0, y: 0 });
 
     // Make sure the card is visible
-    const currentStartup =
-      MOCK_STARTUPS[currentStartupIndex % MOCK_STARTUPS.length];
+    const currentStartup = startups[currentStartupIndex % startups.length];
     if (!currentStartup) {
       // If for some reason we don't have a startup, reset to the first one
       setCurrentStartupIndex(0);
     }
-  }, [currentStartupIndex]);
+  }, [currentStartupIndex, startups]);
 
-  // Check if funds are depleted
+  // Check if funds are depleted and track achievements
   useEffect(() => {
     if (balance <= 0) {
       setShowFundOptions(true);
     }
-  }, [balance]);
+
+    // Update achievements when relevant state changes
+    if (userId) {
+      // Track achievement progress
+      const trackAchievements = async () => {
+        try {
+          // First investment achievement (Baby Shark)
+          if (completedInvestments > 0) {
+            await supabase.from("user_achievements").upsert(
+              {
+                user_id: userId,
+                achievement_id: "1", // Baby Shark
+                progress: completedInvestments,
+                unlocked: completedInvestments >= 50,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: ["user_id", "achievement_id"] },
+            );
+          }
+
+          // Shark Venture achievement
+          if (completedInvestments > 0) {
+            await supabase.from("user_achievements").upsert(
+              {
+                user_id: userId,
+                achievement_id: "2", // Shark Venture
+                progress: completedInvestments,
+                unlocked: completedInvestments >= 100,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: ["user_id", "achievement_id"] },
+            );
+          }
+
+          // Shark Don achievement
+          if (completedInvestments > 0) {
+            await supabase.from("user_achievements").upsert(
+              {
+                user_id: userId,
+                achievement_id: "3", // Shark Don
+                progress: completedInvestments,
+                unlocked: completedInvestments >= 500,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: ["user_id", "achievement_id"] },
+            );
+          }
+
+          // Investment streak achievement (Daily)
+          if (investmentStreak > 0) {
+            await supabase.from("user_achievements").upsert(
+              {
+                user_id: userId,
+                achievement_id: "11", // Daily Streak
+                progress: investmentStreak,
+                unlocked: investmentStreak >= 3,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: ["user_id", "achievement_id"] },
+            );
+          }
+
+          // First Investment of the day (Daily)
+          if (completedInvestments > 0) {
+            await supabase.from("user_achievements").upsert(
+              {
+                user_id: userId,
+                achievement_id: "10", // First Investment
+                progress: 1,
+                unlocked: true,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: ["user_id", "achievement_id"] },
+            );
+          }
+        } catch (error) {
+          console.error("Error tracking achievements:", error);
+        }
+      };
+
+      trackAchievements();
+    }
+  }, [balance, completedInvestments, investmentStreak, userId]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -260,7 +417,7 @@ export default function MainGameScreen() {
 
   const handleInvest = (customAmount = 0) => {
     resetIdleTimer();
-    const startup = MOCK_STARTUPS[currentStartupIndex % MOCK_STARTUPS.length];
+    const startup = startups[currentStartupIndex % startups.length];
     const investmentAmount =
       customAmount > 0 ? customAmount : startup.fundingAsk;
 
@@ -276,17 +433,8 @@ export default function MainGameScreen() {
       return;
     }
 
-    // Determine outcome based on ROI potential (higher ROI = higher risk)
-    // ROI > 100% = higher risk/reward, ROI < 100% = lower risk/reward
-    const roiPotential = startup.roiPotential;
-    let successRate = 0.6; // Base 60% success rate
-
-    // Adjust success rate based on ROI potential
-    if (roiPotential > 150) {
-      successRate = 0.4; // High ROI = higher risk (40% success)
-    } else if (roiPotential < 80) {
-      successRate = 0.75; // Low ROI = lower risk (75% success)
-    }
+    // Fixed 20% success rate (80% failure) as requested
+    const successRate = 0.2; // Base 20% success rate (80% failure)
 
     const isSuccess = Math.random() < successRate;
     let returnAmount = 0;
@@ -294,14 +442,14 @@ export default function MainGameScreen() {
     if (isSuccess) {
       // Success: ROI-based return (higher ROI = higher return)
       const baseMultiplier = 1.5;
-      const roiBonus = roiPotential / 100;
+      const roiBonus = startup.roiPotential / 100;
       const multiplier = baseMultiplier + Math.random() * roiBonus;
       returnAmount = Math.round(investmentAmount * multiplier);
 
-      // Update balance and score
+      // Update balance and shark dollars
       const profit = returnAmount - investmentAmount;
       setBalance((prev) => prev - investmentAmount + returnAmount);
-      setScore((prev) => prev + Math.round(profit / 1000));
+      setSharkDollars((prev) => prev + Math.round(profit / 100));
 
       // Add to completed investments count for missions
       setCompletedInvestments((prev) => prev + 1);
@@ -315,12 +463,60 @@ export default function MainGameScreen() {
         message: `Great investment in ${startup.name}! +${(returnAmount - investmentAmount).toLocaleString()}`,
         type: "success",
       });
+
+      // Play success sound
+      playSuccessSound();
+
+      // Save investment to Supabase if logged in
+      if (userId) {
+        const investment = {
+          startupId: startup.id,
+          companyName: startup.name,
+          investedAmount: investmentAmount,
+          currentValue: returnAmount,
+          changePercentage:
+            ((returnAmount - investmentAmount) / investmentAmount) * 100,
+          investmentDate: new Date().toISOString(),
+          fundingType: startup.fundingType || "Equity",
+        };
+
+        saveInvestment(userId, investment);
+
+        // Update game state
+        saveGameState(userId, {
+          balance: balance - investmentAmount + returnAmount,
+          sharkDollars: sharkDollars + Math.round(profit / 100),
+          completedInvestments: completedInvestments + 1,
+          investmentStreak: investmentStreak + 1,
+        });
+
+        // Update leaderboard
+        updateLeaderboard(
+          userId,
+          "Player",
+          sharkDollars + Math.round(profit / 100),
+        );
+
+        // Track Big Spender achievement if investment is large
+        if (investmentAmount >= 300000) {
+          await supabase.from("user_achievements").upsert(
+            {
+              user_id: userId,
+              achievement_id: "12", // Big Spender
+              progress: investmentAmount,
+              unlocked: true,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: ["user_id", "achievement_id"] },
+          );
+        }
+      }
     } else {
       // Failure: lose 50% to 100% of investment
       const lossPercentage = 0.5 + Math.random() * 0.5;
       const lossAmount = Math.round(investmentAmount * lossPercentage);
       setBalance((prev) => prev - lossAmount);
-      setScore((prev) => prev - 50);
+      setSharkDollars((prev) => Math.max(0, prev - 5000));
       returnAmount = -lossAmount;
 
       // Reset streak on failure
@@ -332,6 +528,35 @@ export default function MainGameScreen() {
         message: `Investment in ${startup.name} didn't pay off. -${Math.abs(returnAmount).toLocaleString()}`,
         type: "error",
       });
+
+      // Play failure sound
+      playFailureSound();
+
+      // Save investment to Supabase if logged in
+      if (userId) {
+        const investment = {
+          startupId: startup.id,
+          companyName: startup.name,
+          investedAmount: investmentAmount,
+          currentValue: investmentAmount - lossAmount,
+          changePercentage: -lossPercentage * 100,
+          investmentDate: new Date().toISOString(),
+          fundingType: startup.fundingType || "Equity",
+        };
+
+        saveInvestment(userId, investment);
+
+        // Update game state with updated values
+        saveGameState(userId, {
+          balance: balance - lossAmount,
+          sharkDollars: Math.max(0, sharkDollars - 5000),
+          completedInvestments: completedInvestments + 1,
+          investmentStreak: 0,
+        });
+
+        // Update leaderboard
+        updateLeaderboard(userId, "Player", Math.max(0, sharkDollars - 5000));
+      }
     }
 
     // Animate card off screen and ensure next card appears
@@ -344,7 +569,7 @@ export default function MainGameScreen() {
     // Move to next card after animation with a slight delay
     setTimeout(() => {
       position.setValue({ x: 0, y: 0 }); // Reset position for next card
-      setCurrentStartupIndex((prev) => (prev + 1) % MOCK_STARTUPS.length);
+      setCurrentStartupIndex((prev) => (prev + 1) % startups.length);
     }, 300);
   };
 
@@ -360,7 +585,7 @@ export default function MainGameScreen() {
     // Move to next card after animation with a slight delay
     setTimeout(() => {
       position.setValue({ x: 0, y: 0 }); // Reset position for next card
-      setCurrentStartupIndex((prev) => (prev + 1) % MOCK_STARTUPS.length);
+      setCurrentStartupIndex((prev) => (prev + 1) % startups.length);
     }, 300);
   };
 
@@ -375,8 +600,7 @@ export default function MainGameScreen() {
     }
   };
 
-  const currentStartup =
-    MOCK_STARTUPS[currentStartupIndex % MOCK_STARTUPS.length];
+  const currentStartup = startups[currentStartupIndex % startups.length];
 
   // Mock leaderboard data
   const leaderboardEntries = [
@@ -384,63 +608,63 @@ export default function MainGameScreen() {
       id: "1",
       rank: 1,
       name: "SharkMaster",
-      score: 15750,
+      score: 1575000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark1",
     },
     {
       id: "2",
       rank: 2,
       name: "InvestorPro",
-      score: 12340,
+      score: 1234000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark2",
     },
     {
       id: "3",
       rank: 3,
       name: "MoneyMaker",
-      score: 10980,
+      score: 1098000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark3",
     },
     {
       id: "4",
       rank: 4,
       name: "WealthWizard",
-      score: 9870,
+      score: 987000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark4",
     },
     {
       id: "5",
       rank: 5,
       name: "RichRider",
-      score: 8540,
+      score: 854000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark5",
     },
     {
       id: "6",
       rank: 6,
       name: "CashKing",
-      score: 7650,
+      score: 765000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark6",
     },
     {
       id: "7",
       rank: 7,
       name: "ProfitPirate",
-      score: 6430,
+      score: 643000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark7",
     },
     {
       id: "8",
       rank: 8,
       name: "VentureViking",
-      score: 5280,
+      score: 528000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark8",
     },
     {
       id: "9",
       rank: 9,
       name: "You",
-      score: score,
+      score: sharkDollars,
       isCurrentUser: true,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=you",
     },
@@ -448,7 +672,7 @@ export default function MainGameScreen() {
       id: "10",
       rank: 10,
       name: "StartupSurfer",
-      score: 4120,
+      score: 412000,
       avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=shark10",
     },
   ];
@@ -469,8 +693,8 @@ export default function MainGameScreen() {
       id: "2",
       title: "Investment Streak",
       description: "Successfully invest in 3 startups in a row",
-      reward: 200,
-      rewardType: "points",
+      reward: 20000,
+      rewardType: "cash",
       progress: investmentStreak,
       target: 3,
       completed: false,
@@ -489,8 +713,8 @@ export default function MainGameScreen() {
       id: "4",
       title: "Daily Player",
       description: "Play Startup Shark for 5 minutes today",
-      reward: 100,
-      rewardType: "points",
+      reward: 10000,
+      rewardType: "cash",
       progress: 5,
       target: 5,
       completed: false,
@@ -501,14 +725,33 @@ export default function MainGameScreen() {
     // Find the mission
     const mission = dailyMissions.find((m) => m.id === missionId);
     if (mission) {
-      // Add reward to balance or score based on type
+      // Add reward to balance or shark dollars based on type
       if (mission.rewardType === "cash") {
         setBalance((prev) => prev + mission.reward);
       } else {
-        setScore((prev) => prev + mission.reward);
+        setSharkDollars((prev) => prev + mission.reward);
       }
 
-      // Would update mission completed status in a real app
+      // Update mission completed status
+      const updatedMissions = dailyMissions.map((m) =>
+        m.id === missionId ? { ...m, completed: true } : m,
+      );
+
+      // Save mission progress to Supabase if logged in
+      if (userId) {
+        saveMissionProgress(userId, missionId, mission.target, true);
+
+        // Update game state with new balance/shark dollars
+        saveGameState(userId, {
+          balance,
+          sharkDollars:
+            mission.rewardType === "cash"
+              ? sharkDollars
+              : sharkDollars + mission.reward,
+          completedInvestments,
+          investmentStreak,
+        });
+      }
     }
   };
 
@@ -540,17 +783,18 @@ export default function MainGameScreen() {
     },
   ];
 
-  // Mock achievements data
+  // Achievement data with updated categories
   const mockAchievements = [
     {
       id: "1",
       title: "First Investment",
       description: "Make your first investment",
-      reward: 100,
-      rewardType: "points",
-      progress: 1,
+      reward: 10000,
+      rewardType: "cash",
+      progress: completedInvestments > 0 ? 1 : 0,
       target: 1,
-      unlocked: true,
+      unlocked: completedInvestments > 0,
+      category: "milestone",
     },
     {
       id: "2",
@@ -558,29 +802,54 @@ export default function MainGameScreen() {
       description: "Invest $1,000,000 total",
       reward: 250000,
       rewardType: "cash",
-      progress: 530000,
+      progress: totalInvested || 530000, // Use actual total if available
       target: 1000000,
-      unlocked: false,
+      unlocked: (totalInvested || 530000) >= 1000000,
+      category: "milestone",
     },
     {
       id: "3",
-      title: "Shark Tank",
+      title: "Smart Investor",
       description: "Reach $5,000,000 in portfolio value",
-      reward: 500,
-      rewardType: "points",
-      progress: 767000,
+      reward: 50000,
+      rewardType: "cash",
+      progress: totalValue || 767000, // Use actual total if available
       target: 5000000,
-      unlocked: false,
+      unlocked: (totalValue || 767000) >= 5000000,
+      category: "milestone",
     },
     {
       id: "4",
-      title: "Lucky Streak",
+      title: "Shark",
       description: "Make 5 successful investments in a row",
       reward: 100000,
       rewardType: "cash",
-      progress: 2,
+      progress: investmentStreak,
       target: 5,
-      unlocked: false,
+      unlocked: investmentStreak >= 5,
+      category: "milestone",
+    },
+    {
+      id: "5",
+      title: "Daily Player",
+      description: "Play Startup Shark today",
+      reward: 5000,
+      rewardType: "cash",
+      progress: 1,
+      target: 1,
+      unlocked: true,
+      category: "daily",
+    },
+    {
+      id: "6",
+      title: "Investment Streak",
+      description: "Successfully invest in 3 startups in a row",
+      reward: 20000,
+      rewardType: "cash",
+      progress: investmentStreak,
+      target: 3,
+      unlocked: investmentStreak >= 3,
+      category: "daily",
     },
   ];
 
@@ -600,6 +869,7 @@ export default function MainGameScreen() {
         investments={mockPortfolio}
         totalInvested={totalInvested}
         totalValue={totalValue}
+        userId={userId}
         onBack={() => setShowPortfolio(false)}
       />
     );
@@ -611,6 +881,7 @@ export default function MainGameScreen() {
         achievements={mockAchievements}
         totalAchievements={mockAchievements.length}
         unlockedAchievements={mockAchievements.filter((a) => a.unlocked).length}
+        userId={userId}
         onBack={() => setShowAchievements(false)}
       />
     );
@@ -622,7 +893,7 @@ export default function MainGameScreen() {
 
       <GameHeader
         balance={balance}
-        score={score}
+        sharkDollars={sharkDollars}
         onMenuPress={() => {
           resetIdleTimer();
           setShowDailyMissions(true);
@@ -726,6 +997,7 @@ export default function MainGameScreen() {
             handleMissionClaim(missionId);
           }}
           isOpen={showDailyMissions}
+          userId={userId}
           onClose={() => {
             resetIdleTimer();
             setShowDailyMissions(false);

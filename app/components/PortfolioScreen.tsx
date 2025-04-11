@@ -31,6 +31,7 @@ interface PortfolioScreenProps {
   totalInvested?: number;
   totalValue?: number;
   onBack?: () => void;
+  userId?: string | null;
 }
 
 const PortfolioScreen = ({
@@ -38,7 +39,7 @@ const PortfolioScreen = ({
   totalInvested = 0,
   totalValue = 0,
   onBack = () => {},
-  userId = "",
+  userId = null,
 }: PortfolioScreenProps) => {
   const [loading, setLoading] = useState(false);
   const [localInvestments, setLocalInvestments] = useState(investments);
@@ -219,9 +220,33 @@ const PortfolioScreen = ({
                 </View>
                 <View>
                   <Text className="text-slate-400 text-xs">Current Value</Text>
-                  <Text className="text-white">
-                    ${investment.currentValue.toLocaleString()}
-                  </Text>
+                  <View className="flex-row items-center">
+                    {investment.changePercentage >= 0 ? (
+                      <TrendingUp size={14} color="#22c55e" className="mr-1" />
+                    ) : (
+                      <TrendingDown
+                        size={14}
+                        color="#ef4444"
+                        className="mr-1"
+                      />
+                    )}
+                    <Text
+                      className="text-white"
+                      style={{
+                        color:
+                          investment.changePercentage >= 0
+                            ? "#22c55e"
+                            : "#ef4444",
+                      }}
+                    >
+                      ${investment.currentValue.toLocaleString()}
+                      <Text className="text-xs ml-1">
+                        {investment.changePercentage >= 0
+                          ? " Good Investment"
+                          : " Bad Investment"}
+                      </Text>
+                    </Text>
+                  </View>
                 </View>
                 <View>
                   <Text className="text-slate-400 text-xs">Date</Text>

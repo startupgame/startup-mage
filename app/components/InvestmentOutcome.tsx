@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { safeNotification } from "../utils/haptics";
+import { playSuccessSound, playFailureSound } from "../utils/sounds";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -40,8 +41,10 @@ export default function InvestmentOutcome({
       // Trigger haptic feedback based on outcome
       if (isSuccess) {
         safeNotification(Haptics.NotificationFeedbackType.Success);
+        playSuccessSound(); // Play good investment sound effect
       } else {
         safeNotification(Haptics.NotificationFeedbackType.Error);
+        playFailureSound(); // Play bad investment sound effect
       }
 
       // Animate modal in
@@ -144,10 +147,10 @@ export default function InvestmentOutcome({
             </View>
           </View>
 
-          {/* Points */}
+          {/* Shark Dollars */}
           <View className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg mb-6 items-center">
             <Text className="text-gray-800 dark:text-gray-200 font-medium">
-              {isSuccess ? "+200 points" : "-50 points"}
+              {isSuccess ? "+20,000 Shark Dollars" : "-5,000 Shark Dollars"}
             </Text>
           </View>
 

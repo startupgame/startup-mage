@@ -13,7 +13,7 @@ import { safeImpact } from "../utils/haptics";
 
 interface GameHeaderProps {
   balance?: number;
-  score?: number;
+  sharkDollars?: number;
   onMenuPress?: () => void;
   onStorePress?: () => void;
   onLeaderboardPress?: () => void;
@@ -25,7 +25,7 @@ interface GameHeaderProps {
 
 const GameHeader = ({
   balance = 1000000,
-  score = 0,
+  sharkDollars = 0,
   onMenuPress,
   onStorePress,
   onLeaderboardPress,
@@ -135,7 +135,10 @@ const GameHeader = ({
           <Text className="text-xl font-bold text-white">
             {formattedBalance}
           </Text>
-          <Text className="text-sm text-blue-200">{score} points</Text>
+          <Text className="text-sm text-blue-200 font-semibold">
+            {sharkDollars > 0 ? `${sharkDollars.toLocaleString()} ` : ""}Shark
+            Dollars
+          </Text>
         </View>
 
         {/* Right side - Store and Leaderboard buttons */}

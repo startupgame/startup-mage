@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
 } from "react-native";
+import { playSwipeSound } from "../utils/sounds";
 import { PanGestureHandler } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedGestureHandler,
@@ -31,11 +32,20 @@ import {
   ChevronUp,
   ChevronDown,
   Sparkles,
+  AlertTriangle,
+  Lightbulb,
+  Database,
+  LineChart,
+  Quote,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-// Funding types for random selection
-const FUNDING_TYPES = [
+import { getFundingTypes } from "../utils/supabase";
+
+// Default funding types for random selection (will be replaced with data from Supabase)
+const DEFAULT_FUNDING_TYPES = [
   { type: "Equity", format: "$%amount% for %stake%% Equity in the Company" },
   { type: "Convertible Notes", format: "$%amount% via Convertible Notes" },
   {
@@ -110,6 +120,33 @@ const StartupCard = ({
   onSwipeLeft = () => {},
   onSwipeRight = (amount: number) => {},
 }: StartupCardProps) => {
+  // State for funding types from Supabase
+  const [fundingTypes, setFundingTypes] = useState(DEFAULT_FUNDING_TYPES);
+  const [expanded, setExpanded] = useState(false);
+
+  // Load funding types from Supabase
+  useEffect(() => {
+    const loadFundingTypes = async () => {
+      try {
+        const data = await getFundingTypes();
+        if (data && data.length > 0) {
+          setFundingTypes(
+            data.map((item) => ({
+              type: item.type,
+              format: item.format,
+            })),
+          );
+        } else {
+          console.log("No funding types found in Supabase, using defaults");
+        }
+      } catch (error) {
+        console.error("Error loading funding types:", error);
+      }
+    };
+
+    loadFundingTypes();
+  }, []);
+
   // Generate random funding amount and type
   const generateRandomFunding = () => {
     // Random amount between 100k and 999k
@@ -118,7 +155,7 @@ const StartupCard = ({
     const stake = Math.floor(Math.random() * 20) + 5;
     // Random funding type
     const fundingType =
-      FUNDING_TYPES[Math.floor(Math.random() * FUNDING_TYPES.length)];
+      fundingTypes[Math.floor(Math.random() * fundingTypes.length)];
 
     return {
       amount,
@@ -142,6 +179,7 @@ const StartupCard = ({
   const rotation = useSharedValue(0);
   const scale = useSharedValue(1);
   const cardElevation = useSharedValue(1);
+  const position = useSharedValue({ x: 0, y: 0 });
 
   // Generate new funding details when company name changes
   useEffect(() => {
@@ -174,17 +212,19 @@ const StartupCard = ({
     onEnd: (event) => {
       if (translateX.value > SWIPE_THRESHOLD) {
         // Swipe right - invest
-        translateX.value = withSpring(SCREEN_WIDTH * 1.5);
+        translateX.value = withSpring(SCREEN_WIDTH * 1.5, { damping: 15 });
+        runOnJS(playSwipeSound)();
         runOnJS(onSwipeRight)(investmentAmount);
       } else if (translateX.value < -SWIPE_THRESHOLD) {
         // Swipe left - pass
-        translateX.value = withSpring(-SCREEN_WIDTH * 1.5);
+        translateX.value = withSpring(-SCREEN_WIDTH * 1.5, { damping: 15 });
+        runOnJS(playSwipeSound)();
         runOnJS(onSwipeLeft)();
       } else {
         // Return to center
-        translateX.value = withSpring(0);
-        rotation.value = withSpring(0);
-        scale.value = withSpring(1);
+        translateX.value = withSpring(0, { damping: 20 });
+        rotation.value = withSpring(0, { damping: 20 });
+        scale.value = withSpring(1, { damping: 20 });
       }
       cardElevation.value = withTiming(1, { duration: 200 });
     },
@@ -194,6 +234,7 @@ const StartupCard = ({
     return {
       transform: [
         { translateX: translateX.value },
+        { translateY: position.value.y },
         { rotate: `${rotation.value}deg` },
         { scale: scale.value },
       ],
@@ -254,270 +295,222 @@ const StartupCard = ({
     setInvestmentAmount(newAmount);
   };
 
+  const toggleExpanded = () => {
+    setExpanded(!expanded);
+  };
+
+  const formatFundingAsk = () => {
+    return fundingDetails.formattedAsk;
+  };
+
   return (
-    <View className="flex-1 items-center justify-center bg-gray-100">
-      <PanGestureHandler onGestureEvent={gestureHandler}>
-        <Animated.View
-          className="overflow-hidden"
-          style={[{ width: 380, height: 580 }, animatedStyle]}
-        >
-          {/* Swipe indicators */}
-          <Animated.View
-            style={[investOpacity]}
-            className="absolute top-10 right-5 z-50 bg-green-500 px-4 py-2 rounded-full rotate-12"
-          >
-            <Text className="text-white font-bold">INVEST!</Text>
-          </Animated.View>
+    <View className="w-[350px] bg-[#1e293b] rounded-3xl overflow-hidden shadow-xl border border-[#334155]">
+      {/* Header */}
+      <View className="p-5 items-center">
+        <Text className="text-white text-2xl font-bold">{companyName}</Text>
+        <View className="w-full h-[1px] bg-[#475569] my-3" />
+        <Text className="text-[#cbd5e1] text-center">
+          Ask: {formatFundingAsk()}
+        </Text>
+        <View className="mt-3">
+          <Text className="text-[#f59e0b] font-medium text-lg">
+            +{roiPotential} ROI Potential
+          </Text>
+        </View>
+      </View>
 
-          <Animated.View
-            style={[passOpacity]}
-            className="absolute top-10 left-5 z-50 bg-red-500 px-4 py-2 rounded-full -rotate-12"
-          >
-            <Text className="text-white font-bold">PASS</Text>
-          </Animated.View>
-
-          {/* Main Card */}
-          <View className="bg-white rounded-3xl shadow-2xl overflow-hidden h-full border-2 border-blue-100">
-            {/* Card Header */}
-            <LinearGradient
-              colors={["#3b82f6", "#1d4ed8"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              className="p-5 rounded-t-3xl"
-            >
-              <View className="flex-row justify-between items-center">
-                <Text className="text-white text-2xl font-bold">
-                  {companyName}
-                </Text>
-                <View className="bg-yellow-400/20 px-2 py-1 rounded-md">
-                  <Star size={16} color="#fbbf24" />
-                </View>
-              </View>
-
-              {/* Interactive Funding Ask */}
-              <Pressable
-                onPress={() => setShowAmountControls(!showAmountControls)}
-                className="mt-3 bg-white/20 p-3 rounded-xl border border-white/30"
-              >
-                <View className="flex-row justify-between items-start">
-                  <View className="flex-row items-start flex-1 mr-2">
-                    <DollarSign
-                      size={16}
-                      color="white"
-                      style={{ marginTop: 3 }}
-                    />
-                    <Text className="text-white ml-1 font-medium flex-shrink flex-wrap">
-                      Ask:{" "}
-                      <Text className="text-yellow-300 font-bold">
-                        ${fundingDetails.amount.toLocaleString()}
-                      </Text>{" "}
-                      {fundingDetails.type !== "Equity"
-                        ? `via ${fundingDetails.type}`
-                        : `for ${fundingDetails.stake}% Equity`}
-                    </Text>
-                  </View>
-                  <Sparkles size={16} color="#fbbf24" />
-                </View>
-
-                {showAmountControls && (
-                  <View className="mt-3 bg-white/10 p-3 rounded-lg">
-                    <Text className="text-white text-xs mb-2">
-                      Adjust your investment:
-                    </Text>
-                    <View className="flex-row items-center justify-between">
-                      <TouchableOpacity
-                        onPress={decreaseAmount}
-                        className="bg-blue-700 w-10 h-10 rounded-full items-center justify-center"
-                      >
-                        <ChevronDown size={20} color="white" />
-                      </TouchableOpacity>
-
-                      <Text className="text-white font-bold">
-                        ${investmentAmount.toLocaleString()}
-                      </Text>
-
-                      <TouchableOpacity
-                        onPress={increaseAmount}
-                        className="bg-blue-700 w-10 h-10 rounded-full items-center justify-center"
-                      >
-                        <ChevronUp size={20} color="white" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </Pressable>
-
-              <View className="flex-row justify-between mt-3">
-                <View className="flex-row items-center bg-green-500/30 px-3 py-1 rounded-full">
-                  <TrendingUp size={14} color="white" />
-                  <Text className="text-white ml-1 font-medium">
-                    ROI: {roiPotential}
-                  </Text>
-                </View>
-              </View>
-            </LinearGradient>
-
-            {/* Card Content - Scrollable */}
-            <ScrollView
-              className="flex-1 p-5"
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Problem & Solution Section */}
-              <View className="mb-4 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
-                <View className="flex-row items-center mb-3">
-                  <View className="w-8 h-8 rounded-full bg-red-100 items-center justify-center mr-2">
-                    <TrendingDown size={16} color="#ef4444" />
-                  </View>
-                  <Text className="text-red-500 font-bold text-base">
-                    Problem
-                  </Text>
-                </View>
-                <Text className="text-gray-700 text-sm leading-relaxed">
-                  {problem}
-                </Text>
-
-                <View className="flex-row items-center mb-3 mt-4">
-                  <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mr-2">
-                    <Zap size={16} color="#3b82f6" />
-                  </View>
-                  <Text className="text-blue-500 font-bold text-base">
-                    Solution
-                  </Text>
-                </View>
-                <Text className="text-gray-700 text-sm leading-relaxed">
-                  {solution}
-                </Text>
-              </View>
-
-              {/* Market & Traction */}
-              <View className="mb-4 flex-row">
-                <View className="flex-1 mr-2 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
-                  <View className="flex-row items-center mb-2">
-                    <Target size={16} color="#10b981" />
-                    <Text className="text-green-500 font-bold text-sm ml-1">
-                      Market Size
-                    </Text>
-                  </View>
-                  <Text className="text-gray-700 text-xs">{marketSize}</Text>
-                </View>
-
-                <View className="flex-1 ml-2 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
-                  <View className="flex-row items-center mb-2">
-                    <TrendingUp size={16} color="#8b5cf6" />
-                    <Text className="text-purple-500 font-bold text-sm ml-1">
-                      Traction
-                    </Text>
-                  </View>
-                  <Text className="text-gray-700 text-xs">{traction}</Text>
-                </View>
-              </View>
-
-              {/* Team & Financials */}
-              <View className="mb-4 flex-row">
-                <View className="flex-1 mr-2 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
-                  <View className="flex-row items-center mb-2">
-                    <Users size={16} color="#0ea5e9" />
-                    <Text className="text-sky-500 font-bold text-sm ml-1">
-                      Team
-                    </Text>
-                  </View>
-                  <Text className="text-gray-700 text-xs">{team}</Text>
-                </View>
-
-                <View className="flex-1 ml-2 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
-                  <View className="flex-row items-center mb-2">
-                    <BarChart size={16} color="#f59e0b" />
-                    <Text className="text-amber-500 font-bold text-sm ml-1">
-                      Financials
-                    </Text>
-                  </View>
-                  <Text className="text-gray-700 text-xs">{financials}</Text>
-                </View>
-              </View>
-
-              {/* Use of Funds Chart */}
-              <View className="mb-4 bg-gray-50 p-4 rounded-xl shadow-md border border-gray-100">
-                <View className="flex-row items-center mb-3">
-                  <PieChart size={16} color="#10b981" />
-                  <Text className="text-green-500 font-bold text-base ml-1">
-                    Use of Funds
-                  </Text>
-                </View>
-
-                {/* Simple bar chart visualization */}
-                <View className="mb-2">
-                  {fundData.map((item, index) => (
-                    <View key={index} className="mb-3">
-                      <View className="flex-row justify-between mb-1">
-                        <Text className="text-gray-700 text-xs font-medium">
-                          {item.category}
-                        </Text>
-                        <Text className="text-gray-700 text-xs font-medium">
-                          {item.percent}%
-                        </Text>
-                      </View>
-                      <View className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                        <LinearGradient
-                          colors={
-                            index === 0
-                              ? ["#60a5fa", "#3b82f6"]
-                              : index === 1
-                                ? ["#4ade80", "#10b981"]
-                                : ["#fbbf24", "#f59e0b"]
-                          }
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          className="h-full"
-                          style={{ width: `${item.percent}%` }}
-                        />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-
-              {/* Customer Quote */}
-              <View className="mb-4 bg-blue-50 p-4 rounded-xl shadow-md border border-blue-100">
-                <Text className="text-gray-800 italic text-sm text-center leading-relaxed">
-                  "{customerQuote}"
-                </Text>
-              </View>
-
-              {/* Closing Hook */}
-              <LinearGradient
-                colors={["#3b82f6", "#1d4ed8"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="mb-4 p-4 rounded-xl shadow-md"
-              >
-                <Text className="text-white font-medium text-sm text-center">
-                  {closingHook}
-                </Text>
-              </LinearGradient>
-            </ScrollView>
-
-            {/* Swipe Instructions */}
-            <View className="absolute bottom-0 left-0 right-0 p-4 flex-row justify-between bg-white/90 backdrop-blur-sm border-t border-gray-100">
-              <View className="items-center">
-                <View className="w-10 h-10 rounded-full bg-red-100 items-center justify-center">
-                  <TrendingDown size={20} color="#ef4444" />
-                </View>
-                <Text className="text-xs text-gray-500 mt-1">
-                  Swipe Left to Pass
-                </Text>
-              </View>
-              <View className="items-center">
-                <View className="w-10 h-10 rounded-full bg-green-100 items-center justify-center">
-                  <DollarSign size={20} color="#10b981" />
-                </View>
-                <Text className="text-xs text-gray-500 mt-1">
-                  Swipe Right to Invest
-                </Text>
-              </View>
-            </View>
+      {/* Content */}
+      <ScrollView
+        className="max-h-[400px] bg-[#1e293b]"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Problem */}
+        <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+          <View className="flex-row items-center mb-2">
+            <AlertTriangle
+              size={20}
+              color="#1e293b"
+              className="mr-2"
+              strokeWidth={2}
+            />
+            <Text className="text-[#1e293b] font-bold text-lg">Problem</Text>
           </View>
-        </Animated.View>
-      </PanGestureHandler>
+          <Text className="text-[#1e293b]">{problem}</Text>
+        </View>
+
+        {/* Solution */}
+        <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+          <View className="flex-row items-center mb-2">
+            <Lightbulb
+              size={20}
+              color="#1e293b"
+              className="mr-2"
+              strokeWidth={2}
+            />
+            <Text className="text-[#1e293b] font-bold text-lg">Solution</Text>
+          </View>
+          <Text className="text-[#1e293b]">{solution}</Text>
+        </View>
+
+        {/* Use of Funds */}
+        <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+          <View className="flex-row items-center mb-2">
+            <Database
+              size={20}
+              color="#1e293b"
+              className="mr-2"
+              strokeWidth={2}
+            />
+            <Text className="text-[#1e293b] font-bold text-lg">
+              Use of Funds
+            </Text>
+          </View>
+          <Text className="text-[#1e293b]">{useOfFunds}</Text>
+        </View>
+
+        {/* Financials */}
+        <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+          <View className="flex-row items-center mb-2">
+            <LineChart
+              size={20}
+              color="#1e293b"
+              className="mr-2"
+              strokeWidth={2}
+            />
+            <Text className="text-[#1e293b] font-bold text-lg">Financials</Text>
+          </View>
+          <Text className="text-[#1e293b]">{financials}</Text>
+        </View>
+
+        {/* Expanded content */}
+        {expanded && (
+          <>
+            {/* Market Size */}
+            <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+              <View className="flex-row items-center mb-2">
+                <TrendingUp
+                  size={20}
+                  color="#1e293b"
+                  className="mr-2"
+                  strokeWidth={2}
+                />
+                <Text className="text-[#1e293b] font-bold text-lg">
+                  Market Size
+                </Text>
+              </View>
+              <Text className="text-[#1e293b]">{marketSize}</Text>
+            </View>
+
+            {/* Traction */}
+            <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+              <View className="flex-row items-center mb-2">
+                <Target
+                  size={20}
+                  color="#1e293b"
+                  className="mr-2"
+                  strokeWidth={2}
+                />
+                <Text className="text-[#1e293b] font-bold text-lg">
+                  Traction
+                </Text>
+              </View>
+              <Text className="text-[#1e293b]">{traction}</Text>
+            </View>
+
+            {/* Team */}
+            <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+              <View className="flex-row items-center mb-2">
+                <Users
+                  size={20}
+                  color="#1e293b"
+                  className="mr-2"
+                  strokeWidth={2}
+                />
+                <Text className="text-[#1e293b] font-bold text-lg">Team</Text>
+              </View>
+              <Text className="text-[#1e293b]">{team}</Text>
+            </View>
+
+            {/* Competitors */}
+            <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+              <View className="flex-row items-center mb-2">
+                <Target
+                  size={20}
+                  color="#1e293b"
+                  className="mr-2"
+                  strokeWidth={2}
+                />
+                <Text className="text-[#1e293b] font-bold text-lg">
+                  Competitors
+                </Text>
+              </View>
+              <Text className="text-[#1e293b]">{competitors}</Text>
+            </View>
+
+            {/* Customer Quote */}
+            <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+              <View className="flex-row items-center mb-2">
+                <Quote
+                  size={20}
+                  color="#1e293b"
+                  className="mr-2"
+                  strokeWidth={2}
+                />
+                <Text className="text-[#1e293b] font-bold text-lg">
+                  Customer Quote
+                </Text>
+              </View>
+              <Text className="text-[#1e293b]">{customerQuote}</Text>
+            </View>
+          </>
+        )}
+
+        {/* Closing Hook */}
+        <View className="mx-4 mb-4 bg-[#f5f5dc] p-4 rounded-xl">
+          <Text className="text-[#1e293b] font-medium text-center italic">
+            "{closingHook}"
+          </Text>
+        </View>
+
+        {/* Expand/Collapse button */}
+        <TouchableOpacity
+          onPress={toggleExpanded}
+          className="mx-4 mb-4 bg-[#334155] p-3 rounded-xl items-center"
+        >
+          <View className="flex-row items-center">
+            {expanded ? (
+              <>
+                <ChevronUp size={18} color="#f8fafc" className="mr-1" />
+                <Text className="text-white font-medium">Show Less</Text>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={18} color="#f8fafc" className="mr-1" />
+                <Text className="text-white font-medium">
+                  Show More Details
+                </Text>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Action buttons */}
+      <View className="flex-row justify-between p-4 bg-[#1e293b] border-t border-[#334155]">
+        <TouchableOpacity
+          onPress={onSwipeLeft}
+          className="bg-red-600 py-3 px-6 rounded-xl flex-row items-center"
+        >
+          <Text className="text-white font-bold">Pass</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onSwipeRight(investmentAmount)}
+          className="bg-green-600 py-3 px-6 rounded-xl flex-row items-center"
+        >
+          <Text className="text-white font-bold">Invest</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
